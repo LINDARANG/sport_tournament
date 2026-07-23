@@ -60,6 +60,7 @@ GO
 CREATE TABLE users (
     id INT IDENTITY(1,1) PRIMARY KEY,
     email NVARCHAR(255) NOT NULL UNIQUE,
+    member_code NVARCHAR(20) NULL,
     full_name NVARCHAR(255) NOT NULL,
     password_hash NVARCHAR(255) NULL,
     google_id NVARCHAR(255) NULL,
@@ -274,6 +275,10 @@ CREATE TABLE leaderboard_snapshots (
 CREATE INDEX idx_users_email
 ON users(email);
 
+CREATE UNIQUE INDEX uq_users_member_code
+ON users(member_code)
+WHERE member_code IS NOT NULL;
+
 CREATE INDEX idx_tournaments_status
 ON tournaments(status);
 
@@ -308,6 +313,7 @@ GO
 CREATE VIEW vw_user_admin_summary AS
 SELECT
     u.id,
+    u.member_code,
     u.email,
     u.full_name,
     u.role,
@@ -318,6 +324,7 @@ FROM users u
 LEFT JOIN tournament_participants tp ON tp.user_id = u.id
 GROUP BY
     u.id,
+    u.member_code,
     u.email,
     u.full_name,
     u.role,

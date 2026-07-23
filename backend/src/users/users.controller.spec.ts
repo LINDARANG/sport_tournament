@@ -14,6 +14,8 @@ describe('UsersController', () => {
           useValue: {
             findAll: jest.fn(),
             createPlayerByAdmin: jest.fn(),
+            renamePlayerByAdmin: jest.fn(),
+            deletePlayerByAdmin: jest.fn(),
           },
         },
       ],
