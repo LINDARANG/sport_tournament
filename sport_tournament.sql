@@ -66,11 +66,15 @@ CREATE TABLE users (
     google_id NVARCHAR(255) NULL,
     avatar_url NVARCHAR(500) NULL,
     role NVARCHAR(20) NOT NULL DEFAULT 'PLAYER',
+    user_status NVARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     created_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
     updated_at DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
 
     CONSTRAINT chk_users_role
-    CHECK (role IN ('ADMIN', 'PLAYER'))
+    CHECK (role IN ('ADMIN', 'PLAYER')),
+
+    CONSTRAINT chk_users_status
+    CHECK (user_status IN ('ACTIVE', 'INACTIVE', 'PENDING'))
 );
 
 CREATE TABLE tournaments (
@@ -317,6 +321,7 @@ SELECT
     u.email,
     u.full_name,
     u.role,
+    u.user_status,
     u.created_at,
     u.updated_at,
     COUNT(DISTINCT tp.tournament_id) AS events_count
@@ -328,6 +333,7 @@ GROUP BY
     u.email,
     u.full_name,
     u.role,
+    u.user_status,
     u.created_at,
     u.updated_at;
 GO

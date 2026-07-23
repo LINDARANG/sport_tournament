@@ -15,7 +15,9 @@ import {
   isTwentyTechEmail,
   normalizeEmail,
 } from '../auth/auth.constants';
-import { User } from './user.entity';
+import { User, type UserStatus } from './user.entity';
+
+const USER_STATUSES: UserStatus[] = ['ACTIVE', 'INACTIVE', 'PENDING'];
 
 @Injectable()
 export class UsersService implements OnModuleInit {
@@ -26,6 +28,7 @@ export class UsersService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureMemberCodeColumn();
+    await this.ensureUserStatusColumn();
     await this.seedDefaultAdmin();
     await this.backfillMemberCodes();
   }
@@ -40,6 +43,7 @@ export class UsersService implements OnModuleInit {
         u.email,
         u.full_name AS fullName,
         u.role,
+        u.user_status AS status,
         u.created_at AS createdAt,
         u.updated_at AS updatedAt,
         COUNT(DISTINCT tp.tournament_id) AS eventsCount
@@ -51,6 +55,7 @@ export class UsersService implements OnModuleInit {
         u.email,
         u.full_name,
         u.role,
+        u.user_status,
         u.created_at,
         u.updated_at
       ORDER BY u.created_at DESC
@@ -100,6 +105,7 @@ export class UsersService implements OnModuleInit {
       fullName,
       passwordHash,
       role: 'PLAYER',
+      status: 'ACTIVE',
     });
 
     const savedUser = await this.usersRepository.save(user);
@@ -110,6 +116,7 @@ export class UsersService implements OnModuleInit {
       email: savedUser.email,
       fullName: savedUser.fullName,
       role: savedUser.role,
+      status: savedUser.status,
       defaultPassword: DEFAULT_PLAYER_PASSWORD,
     };
   }
@@ -162,6 +169,37 @@ export class UsersService implements OnModuleInit {
       email: savedUser.email,
       fullName: savedUser.fullName,
       role: savedUser.role,
+      status: savedUser.status,
+    };
+  }
+
+  async updatePlayerStatusByAdmin(id: number, status: UserStatus) {
+    if (!USER_STATUSES.includes(status)) {
+      throw new BadRequestException('Invalid user status.');
+    }
+
+    const user = await this.usersRepository.findOne({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+
+    if (user.role === 'ADMIN' || normalizeEmail(user.email) === ADMIN_EMAIL) {
+      throw new BadRequestException('Cannot update the admin account status.');
+    }
+
+    user.status = status;
+    const savedUser = await this.usersRepository.save(user);
+
+    return {
+      id: savedUser.id,
+      memberCode: savedUser.memberCode,
+      email: savedUser.email,
+      fullName: savedUser.fullName,
+      role: savedUser.role,
+      status: savedUser.status,
     };
   }
 
@@ -182,6 +220,68 @@ export class UsersService implements OnModuleInit {
 
     return {
       message: 'User deleted successfully.',
+    };
+  }
+
+  async deleteAllPlayersByAdmin() {
+    const admin = await this.findByEmail(ADMIN_EMAIL);
+
+    if (!admin) {
+      throw new NotFoundException('Admin account not found.');
+    }
+
+    const [{ totalPlayers }] = await this.usersRepository.query(`
+      SELECT COUNT(*) AS totalPlayers
+      FROM users
+      WHERE role = 'PLAYER'
+        AND email <> @0
+    `, [ADMIN_EMAIL]);
+    const deletedCount = Number(totalPlayers ?? 0);
+
+    await this.usersRepository.manager.transaction(async (manager) => {
+      await manager.query(`
+        DELETE p
+        FROM predictions p
+        JOIN users u ON u.id = p.user_id
+        WHERE u.role = 'PLAYER'
+          AND u.email <> @0
+      `, [ADMIN_EMAIL]);
+
+      await manager.query(`
+        DELETE ls
+        FROM leaderboard_snapshots ls
+        JOIN users u ON u.id = ls.user_id
+        WHERE u.role = 'PLAYER'
+          AND u.email <> @0
+      `, [ADMIN_EMAIL]);
+
+      await manager.query(`
+        DELETE tp
+        FROM tournament_participants tp
+        JOIN users u ON u.id = tp.user_id
+        WHERE u.role = 'PLAYER'
+          AND u.email <> @0
+      `, [ADMIN_EMAIL]);
+
+      await manager.query(`
+        UPDATE t
+        SET created_by = @0
+        FROM tournaments t
+        JOIN users u ON u.id = t.created_by
+        WHERE u.role = 'PLAYER'
+          AND u.email <> @1
+      `, [admin.id, ADMIN_EMAIL]);
+
+      await manager.query(`
+        DELETE FROM users
+        WHERE role = 'PLAYER'
+          AND email <> @0
+      `, [ADMIN_EMAIL]);
+    });
+
+    return {
+      message: 'All players deleted successfully.',
+      deletedCount,
     };
   }
 
@@ -216,6 +316,7 @@ export class UsersService implements OnModuleInit {
       fullName: 'Son Vu',
       passwordHash,
       role: 'ADMIN',
+      status: 'ACTIVE',
     });
 
     await this.usersRepository.save(admin);
@@ -226,6 +327,15 @@ export class UsersService implements OnModuleInit {
       IF COL_LENGTH('users', 'member_code') IS NULL
       BEGIN
         ALTER TABLE users ADD member_code NVARCHAR(20) NULL;
+      END
+    `);
+  }
+
+  private async ensureUserStatusColumn() {
+    await this.usersRepository.query(`
+      IF COL_LENGTH('users', 'user_status') IS NULL
+      BEGIN
+        ALTER TABLE users ADD user_status NVARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
       END
     `);
   }

@@ -60,7 +60,7 @@ export default function LoginPage() {
     <main className="auth-page flex min-h-screen flex-col overflow-hidden">
       <header className="flex h-[90px] shrink-0 items-center justify-between border-b border-white/10 px-8">
         <h1 className="text-[30px] font-black tracking-[-0.06em] text-[#9ddff2] drop-shadow-[0_0_10px_rgba(142,216,236,0.45)]">
-          GOALCRYSTAL
+          TWENTY-TECH
         </h1>
 
         <div className="flex items-center gap-8 text-zinc-300">
@@ -87,7 +87,7 @@ export default function LoginPage() {
             type="email"
             value={username}
             onChange={(event) => setUsername(event.target.value)}
-            placeholder="son.vu@twenty-tech.com"
+            placeholder="YOUR COMPANY EMAIL"
             className="mb-8 h-[72px] w-full rounded border border-white/10 bg-[#080f0f] px-5 text-xl font-bold text-zinc-200 outline-none transition placeholder:text-zinc-600 focus:border-[#8ed8ec88]"
           />
 
@@ -101,7 +101,7 @@ export default function LoginPage() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="123456"
+              placeholder="YOUR PASSWORD"
               className="w-full bg-transparent text-xl font-bold text-zinc-200 outline-none placeholder:text-zinc-600"
             />
 
@@ -123,11 +123,18 @@ export default function LoginPage() {
             <LogIn size={24} />
           </button>
 
-          <div className="mt-12 flex justify-between text-sm font-semibold text-zinc-300">
+          <div className="mt-12 flex items-center justify-between gap-4 text-sm font-semibold text-zinc-300">
             <Link href="/forgot-password" className="hover:text-[#8ed8ec]">
               Forgot password?
             </Link>
-            <span className="text-zinc-500">Admin default: 123456</span>
+            <button
+              type="button"
+              onClick={() => alert("this feature is not ready")}
+              className="flex h-9 items-center gap-2 rounded border border-white/10 bg-[#080f0f] px-3 text-xs font-black uppercase tracking-[0.08em] text-zinc-300 transition hover:border-[#8ed8ec88] hover:text-[#8ed8ec]"
+            >
+              <GoogleLogo />
+              Login with Google
+            </button>
           </div>
 
           <div className="mt-10 flex items-center gap-5 text-[13px] font-medium uppercase tracking-[0.45em] text-zinc-600">
@@ -139,8 +146,7 @@ export default function LoginPage() {
       </section>
 
       <footer className="flex h-[78px] shrink-0 items-center justify-between border-t border-white/10 px-10 text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">
-        <p>2024 GoalCrystal Predictor. All data is encrypted.</p>
-
+        <p>2026 TWENTY-TECH Predictor. All data is encrypted.</p>
         <div className="flex gap-10">
           <span>Terms</span>
           <span>Security</span>
@@ -148,5 +154,28 @@ export default function LoginPage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+function GoogleLogo() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9C6.71 7.31 9.14 5.38 12 5.38z"
+      />
+    </svg>
   );
 }

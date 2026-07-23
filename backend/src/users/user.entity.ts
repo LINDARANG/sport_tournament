@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 
 export type UserRole = 'ADMIN' | 'PLAYER';
+export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING';
 
 @Entity('users')
 export class User {
@@ -43,6 +44,14 @@ export class User {
 
   @Column({ name: 'role', type: 'nvarchar', length: 20, default: 'PLAYER' })
   role: UserRole;
+
+  @Column({
+    name: 'user_status',
+    type: 'nvarchar',
+    length: 20,
+    default: 'ACTIVE',
+  })
+  status: UserStatus;
 
   @CreateDateColumn({ name: 'created_at', type: 'datetime2' })
   createdAt: Date;

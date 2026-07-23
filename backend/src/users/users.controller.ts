@@ -39,6 +39,27 @@ export class UsersController {
     };
   }
 
+  @Patch('admin/:id/status')
+  async updatePlayerStatusByAdmin(
+    @Param('id') id: string,
+    @Body() body: { status: 'ACTIVE' | 'INACTIVE' | 'PENDING' },
+  ) {
+    const user = await this.usersService.updatePlayerStatusByAdmin(
+      Number(id),
+      body.status,
+    );
+
+    return {
+      message: 'User status updated successfully.',
+      user,
+    };
+  }
+
+  @Delete('admin/all')
+  deleteAllPlayersByAdmin() {
+    return this.usersService.deleteAllPlayersByAdmin();
+  }
+
   @Delete('admin/:id')
   deletePlayerByAdmin(@Param('id') id: string) {
     return this.usersService.deletePlayerByAdmin(Number(id));
