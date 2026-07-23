@@ -14,6 +14,7 @@ import {
   Gamepad2,
   LayoutDashboard,
   LogOut,
+  MoreVertical,
   Pencil,
   Search,
   Settings,
@@ -31,6 +32,7 @@ type BackendUser = {
   fullName: string;
   email: string;
   role: "ADMIN" | "PLAYER";
+  status?: "ACTIVE" | "INACTIVE" | "PENDING";
   eventsCount?: number;
   createdAt?: string;
 };
@@ -88,6 +90,7 @@ export default function AdminPage() {
     | "createUserFromList"
     | "changePassword"
     | "renamePlayer"
+    | "changeStatus"
     | null
   >(null);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -135,9 +138,17 @@ export default function AdminPage() {
       return players;
     }
 
-    return players.filter((player) =>
-      player.fullName.toLowerCase().includes(keyword),
-    );
+    return players.filter((player) => {
+      const normalizedKeyword = keyword.replace(/^id[-_\s]*/i, "");
+
+      return (
+        player.fullName.toLowerCase().includes(keyword) ||
+        player.email.toLowerCase().includes(keyword) ||
+        player.memberCode.toLowerCase().includes(keyword) ||
+        player.memberCode.toLowerCase().includes(normalizedKeyword) ||
+        player.id.toLowerCase().includes(normalizedKeyword)
+      );
+    });
   }, [nameSearch, players]);
   const totalPages = Math.max(1, Math.ceil(visiblePlayers.length / PLAYERS_PER_PAGE));
   const currentSafePage = Math.min(currentPage, totalPages);
@@ -256,7 +267,7 @@ export default function AdminPage() {
         header: 1,
         blankrows: false,
       });
-      const imported = parsePlayersFromRows(rows, players.map((player) => player.email));
+      const imported = parsePlayersFromRows(rows, players);
 
       setImportFileName(file.name);
       setImportPlayers(imported);
@@ -351,6 +362,88 @@ export default function AdminPage() {
       await fetchPlayers();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Delete player failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function deleteAllPlayers() {
+    if (currentUser?.role !== "ADMIN") {
+      alert("Only admin can delete players.");
+      return;
+    }
+
+    const playerCount = players.filter((player) => player.role === "PLAYER").length;
+
+    if (playerCount === 0) {
+      alert("There are no players to delete.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete all ${playerCount} players? The admin account will be kept.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const data = await apiRequest<{
+        message: string;
+        deletedCount: number;
+      }>("/users/admin/all", {
+        method: "DELETE",
+      });
+
+      alert(`Deleted ${data.deletedCount} players.`);
+      setCurrentPage(1);
+      await fetchPlayers();
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : "Delete all players failed.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function changePlayerStatus(status: Player["status"]) {
+    if (!selectedPlayer) {
+      return;
+    }
+
+    if (currentUser?.role !== "ADMIN") {
+      alert("Only admin can change player status.");
+      return;
+    }
+
+    if (selectedPlayer.role === "ADMIN") {
+      alert("Cannot change the admin account status.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await apiRequest<{ message: string; user: BackendUser }>(
+        `/users/admin/${selectedPlayer.id}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        },
+      );
+
+      alert("Player status updated successfully.");
+      setSelectedPlayer(null);
+      setOpenModal(null);
+      await fetchPlayers();
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : "Change player status failed.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -451,13 +544,6 @@ export default function AdminPage() {
             PLAYERS
           </div>
 
-          <div className="mx-auto flex h-[34px] w-[320px] items-center gap-2 rounded border border-[#3a4d54] bg-[#0d252d] px-3 text-[#c4d3d8]">
-            <Search size={20} />
-            <span className="text-xs font-black uppercase tracking-[0.14em]">
-              Search system...
-            </span>
-          </div>
-
           <div className="ml-auto flex items-center gap-7">
             <Bell size={22} />
             <div className="hidden h-10 w-px bg-[#3c5056] md:block" />
@@ -484,7 +570,7 @@ export default function AdminPage() {
               </p>
             </div>
 
-            <div className="flex gap-5">
+            <div className="flex flex-wrap justify-end gap-4">
               <button
                 onClick={() => setOpenModal("createUser")}
                 className="flex h-[62px] items-center gap-3 rounded bg-[#84d8e8] px-8 text-lg font-black text-[#06161b]"
@@ -498,6 +584,14 @@ export default function AdminPage() {
               >
                 <UserPlus size={27} />
                 Add Player From List
+              </button>
+              <button
+                onClick={() => void deleteAllPlayers()}
+                disabled={isLoading}
+                className="flex h-[62px] items-center gap-3 rounded border border-[#ffab9e66] bg-[#2b1414] px-6 text-lg font-black text-[#ffab9e] transition hover:border-[#ffab9e] disabled:opacity-60"
+              >
+                <Trash2 size={24} />
+                Delete All Players
               </button>
             </div>
           </div>
@@ -545,7 +639,7 @@ export default function AdminPage() {
                   setNameSearch(event.target.value);
                   setCurrentPage(1);
                 }}
-                placeholder="Search by player name..."
+                placeholder="Search by name, email, or ID..."
                 className="h-full flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-[#789098]"
               />
               {nameSearch && (
@@ -579,19 +673,13 @@ export default function AdminPage() {
               </thead>
 
               <tbody>
-                {paginatedPlayers.map((player, index) => (
+                {paginatedPlayers.map((player) => (
                   <tr
                     key={player.id}
                     className="h-[73px] border-b border-[#243c43] text-sm last:border-b-0"
                   >
                     <td className="px-4">
-                      <span
-                        className={`block h-4 w-4 rounded-[2px] border ${
-                          index === 2 || index === 3
-                            ? "border-[#e5feff] bg-[#e5feff]"
-                            : "border-[#3d535a]"
-                        }`}
-                      />
+                      <span className="block h-4 w-4 rounded-[2px] border border-[#3d535a]" />
                     </td>
                     <td>
                       <div className="flex items-center gap-3">
@@ -652,6 +740,26 @@ export default function AdminPage() {
                           className="transition hover:text-[#ffab9e]"
                         >
                           <Trash2 size={18} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!isAdmin) {
+                              alert("Only admin can change player status.");
+                              return;
+                            }
+
+                            if (player.role === "ADMIN") {
+                              alert("Cannot change the admin account status.");
+                              return;
+                            }
+
+                            setSelectedPlayer(player);
+                            setOpenModal("changeStatus");
+                          }}
+                          title="Change status"
+                          className="transition hover:text-[#84d8e8]"
+                        >
+                          <MoreVertical size={18} />
                         </button>
                       </div>
                     </td>
@@ -862,6 +970,49 @@ export default function AdminPage() {
           />
         </Modal>
       )}
+
+      {openModal === "changeStatus" && (
+        <Modal title="Change Player Status">
+          <p className="mb-5 text-sm text-zinc-400">
+            {selectedPlayer?.fullName} - {selectedPlayer?.email}
+          </p>
+
+          <div className="mb-6 grid gap-3">
+            {(["ACTIVE", "INACTIVE", "PENDING"] as Player["status"][]).map(
+              (status) => (
+                <button
+                  key={status}
+                  onClick={() => void changePlayerStatus(status)}
+                  disabled={isLoading}
+                  className={`flex h-[50px] items-center justify-between rounded border px-4 text-left font-black uppercase tracking-[0.12em] transition disabled:opacity-60 ${
+                    selectedPlayer?.status === status
+                      ? "border-[#8ed8ec] bg-[#17343b] text-[#8ed8ec]"
+                      : "border-white/10 bg-[#070d0d] text-zinc-200 hover:border-[#8ed8ec66]"
+                  }`}
+                >
+                  <span>{status}</span>
+                  {selectedPlayer?.status === status && (
+                    <span className="text-xs">CURRENT</span>
+                  )}
+                </button>
+              ),
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                setSelectedPlayer(null);
+                setOpenModal(null);
+              }}
+              disabled={isLoading}
+              className="h-[46px] rounded border border-white/10 px-5 text-zinc-300 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      )}
     </main>
   );
 }
@@ -875,16 +1026,21 @@ function mapUserToPlayer(user: BackendUser): Player {
     role: user.role,
     rank: user.role === "ADMIN" ? "ELITE" : "ROOKIE",
     points: 0,
-    status: user.role === "ADMIN" ? "ACTIVE" : "ACTIVE",
+    status: user.status ?? "ACTIVE",
     events: user.eventsCount ?? 0,
   };
 }
 
 function parsePlayersFromRows(
   rows: unknown[][],
-  existingEmails: string[],
+  existingPlayers: Player[],
 ): ImportedPlayer[] {
-  const usedEmails = new Set(existingEmails.map((email) => email.toLowerCase()));
+  const usedEmails = new Set(
+    existingPlayers.map((player) => player.email.toLowerCase()),
+  );
+  const usedNames = new Set(
+    existingPlayers.map((player) => normalizePlayerName(player.fullName)),
+  );
   const headerIndex = rows.findIndex((row) =>
     row.some((cell) => {
       const value = normalizeHeader(cell);
@@ -916,9 +1072,20 @@ function parsePlayersFromRows(
         continue;
       }
 
+      const normalizedName = normalizePlayerName(fullName);
+
+      if (usedNames.has(normalizedName)) {
+        continue;
+      }
+
       const rawEmail = emailColumn >= 0 ? readCell(row[emailColumn]) : "";
       const email = buildImportEmail(fullName, rawEmail, usedEmails);
 
+      if (!email) {
+        continue;
+      }
+
+      usedNames.add(normalizedName);
       importedPlayers.push({ fullName, email });
     }
 
@@ -934,7 +1101,19 @@ function parsePlayersFromRows(
       continue;
     }
 
+    const normalizedName = normalizePlayerName(fullName);
+
+    if (usedNames.has(normalizedName)) {
+      continue;
+    }
+
     const email = buildImportEmail(fullName, "", usedEmails);
+
+    if (!email) {
+      continue;
+    }
+
+    usedNames.add(normalizedName);
     importedPlayers.push({ fullName, email });
   }
 
@@ -948,22 +1127,35 @@ function buildImportEmail(
 ) {
   const normalizedRawEmail = rawEmail.trim().toLowerCase();
   const generatedLocalPart = slugifyName(fullName) || "player";
-  const baseEmail =
-    normalizedRawEmail || `${generatedLocalPart}${COMPANY_EMAIL_DOMAIN}`;
-  const [rawLocalPart] = baseEmail.split("@");
-  const localPart = rawLocalPart || generatedLocalPart;
-  let email = baseEmail.endsWith(COMPANY_EMAIL_DOMAIN)
-    ? baseEmail
-    : `${localPart}${COMPANY_EMAIL_DOMAIN}`;
-  let duplicateIndex = 2;
+  let email = normalizedRawEmail;
 
-  while (usedEmails.has(email)) {
-    email = `${localPart}${duplicateIndex}${COMPANY_EMAIL_DOMAIN}`;
-    duplicateIndex += 1;
+  if (email) {
+    const [localPart] = email.split("@");
+    email = email.endsWith(COMPANY_EMAIL_DOMAIN)
+      ? email
+      : `${localPart || generatedLocalPart}${COMPANY_EMAIL_DOMAIN}`;
+
+    if (usedEmails.has(email)) {
+      return null;
+    }
+
+    usedEmails.add(email);
+    return email;
+  }
+
+  const localPart = generatedLocalPart;
+  email = `${localPart}${COMPANY_EMAIL_DOMAIN}`;
+
+  if (usedEmails.has(email)) {
+    return null;
   }
 
   usedEmails.add(email);
   return email;
+}
+
+function normalizePlayerName(name: string) {
+  return slugifyName(name);
 }
 
 function slugifyName(name: string) {
