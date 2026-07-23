@@ -10,24 +10,23 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CirclePlus,
   Gamepad2,
   LayoutDashboard,
   LogOut,
-  MoreVertical,
   Pencil,
   Search,
   Settings,
   SlidersHorizontal,
   Trophy,
+  Trash2,
   UserPlus,
-  UserRound,
   Users,
   Wifi,
 } from "lucide-react";
 
 type BackendUser = {
   id: number;
+  memberCode: string | null;
   fullName: string;
   email: string;
   role: "ADMIN" | "PLAYER";
@@ -37,6 +36,7 @@ type BackendUser = {
 
 type Player = {
   id: string;
+  memberCode: string;
   fullName: string;
   email: string;
   role: "ADMIN" | "PLAYER";
@@ -53,6 +53,8 @@ type CreateUserResponse = {
   };
 };
 
+const PLAYERS_PER_PAGE = 5;
+
 export default function AdminPage() {
   const router = useRouter();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -68,12 +70,20 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isNameSearchOpen, setIsNameSearchOpen] = useState(false);
   const [nameSearch, setNameSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [renameFullName, setRenameFullName] = useState("");
   const [openModal, setOpenModal] = useState<
-    "createUser" | "createUserFromList" | "changePassword" | null
+    | "createUser"
+    | "createUserFromList"
+    | "changePassword"
+    | "renamePlayer"
+    | null
   >(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const isAdmin = currentUser?.role === "ADMIN";
 
   useEffect(() => {
     const currentUser = readCurrentUser() as CurrentUser | null;
@@ -119,6 +129,12 @@ export default function AdminPage() {
       player.fullName.toLowerCase().includes(keyword),
     );
   }, [nameSearch, players]);
+  const totalPages = Math.max(1, Math.ceil(visiblePlayers.length / PLAYERS_PER_PAGE));
+  const currentSafePage = Math.min(currentPage, totalPages);
+  const paginatedPlayers = visiblePlayers.slice(
+    (currentSafePage - 1) * PLAYERS_PER_PAGE,
+    currentSafePage * PLAYERS_PER_PAGE,
+  );
 
   async function fetchPlayers() {
     try {
@@ -130,6 +146,11 @@ export default function AdminPage() {
   }
 
   async function createPlayer() {
+    if (!isAdmin) {
+      alert("Only admin can create players.");
+      return;
+    }
+
     if (!fullName.trim() || !email.trim()) {
       alert("Please enter name and email.");
       return;
@@ -155,6 +176,81 @@ export default function AdminPage() {
       await fetchPlayers();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Create user failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function renamePlayer() {
+    if (!selectedPlayer) {
+      return;
+    }
+
+    if (currentUser?.role !== "ADMIN") {
+      alert("Only admin can rename players.");
+      return;
+    }
+
+    if (!renameFullName.trim()) {
+      alert("Please enter a new player name.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await apiRequest<{ message: string; user: BackendUser }>(
+        `/users/admin/${selectedPlayer.id}/rename`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            fullName: renameFullName.trim(),
+          }),
+        },
+      );
+
+      alert("Player renamed successfully.");
+      setSelectedPlayer(null);
+      setRenameFullName("");
+      setOpenModal(null);
+      await fetchPlayers();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Rename player failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function deletePlayer(player: Player) {
+    if (currentUser?.role !== "ADMIN") {
+      alert("Only admin can delete players.");
+      return;
+    }
+
+    if (player.role === "ADMIN") {
+      alert("Cannot delete the admin account.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete player "${player.fullName}"? This action cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      await apiRequest<{ message: string }>(`/users/admin/${player.id}`, {
+        method: "DELETE",
+      });
+
+      alert("Player deleted successfully.");
+      await fetchPlayers();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Delete player failed.");
     } finally {
       setIsLoading(false);
     }
@@ -252,7 +348,7 @@ export default function AdminPage() {
       <section className="ml-[260px] min-h-screen bg-[#06161b]">
         <header className="flex h-[88px] items-center border-b border-[#3c5056] px-8">
           <div className="w-[190px] text-[25px] font-black uppercase leading-8 text-white">
-            DASHBOARD
+            PLAYERS
           </div>
 
           <div className="mx-auto flex h-[34px] w-[320px] items-center gap-2 rounded border border-[#3a4d54] bg-[#0d252d] px-3 text-[#c4d3d8]">
@@ -345,13 +441,19 @@ export default function AdminPage() {
               <Search size={20} />
               <input
                 value={nameSearch}
-                onChange={(event) => setNameSearch(event.target.value)}
+                onChange={(event) => {
+                  setNameSearch(event.target.value);
+                  setCurrentPage(1);
+                }}
                 placeholder="Search by player name..."
                 className="h-full flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-[#789098]"
               />
               {nameSearch && (
                 <button
-                  onClick={() => setNameSearch("")}
+                  onClick={() => {
+                    setNameSearch("");
+                    setCurrentPage(1);
+                  }}
                   className="text-xs font-black uppercase tracking-[0.12em] text-[#84d8e8]"
                 >
                   Clear
@@ -377,7 +479,7 @@ export default function AdminPage() {
               </thead>
 
               <tbody>
-                {visiblePlayers.map((player, index) => (
+                {paginatedPlayers.map((player, index) => (
                   <tr
                     key={player.id}
                     className="h-[73px] border-b border-[#243c43] text-sm last:border-b-0"
@@ -412,7 +514,7 @@ export default function AdminPage() {
                       {player.email}
                     </td>
                     <td className="text-[13px] text-white">
-                      ID-{player.id.padStart(4, "0")}-GC
+                      {player.memberCode}
                     </td>
                     <td>
                       <StatusBadge status={player.status} />
@@ -422,10 +524,34 @@ export default function AdminPage() {
                     </td>
                     <td>
                       <div className="flex items-center gap-5 text-[#dce8eb]">
-                        <UserRound size={18} />
-                        <Pencil size={18} />
-                        <CirclePlus size={18} />
-                        <MoreVertical size={18} />
+                        <button
+                          onClick={() => {
+                            if (!isAdmin) {
+                              alert("Only admin can rename players.");
+                              return;
+                            }
+
+                            if (player.role === "ADMIN") {
+                              alert("Cannot rename the admin account.");
+                              return;
+                            }
+
+                            setSelectedPlayer(player);
+                            setRenameFullName(player.fullName);
+                            setOpenModal("renamePlayer");
+                          }}
+                          title="Rename player"
+                          className="transition hover:text-[#84d8e8]"
+                        >
+                          <Pencil size={18} />
+                        </button>
+                        <button
+                          onClick={() => void deletePlayer(player)}
+                          title="Delete player"
+                          className="transition hover:text-[#ffab9e]"
+                        >
+                          <Trash2 size={18} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -446,20 +572,39 @@ export default function AdminPage() {
 
             <div className="flex h-[65px] items-center justify-between px-4 text-xs uppercase text-white">
               <p>
-                Showing {visiblePlayers.length > 0 ? 1 : 0}-
-                {visiblePlayers.length} of {players.length}
+                Showing{" "}
+                {visiblePlayers.length > 0
+                  ? (currentSafePage - 1) * PLAYERS_PER_PAGE + 1
+                  : 0}
+                -
+                {Math.min(currentSafePage * PLAYERS_PER_PAGE, visiblePlayers.length)}{" "}
+                of {visiblePlayers.length}
               </p>
 
               <div className="flex items-center gap-2">
-                <PageButton>
+                <PageButton
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentSafePage === 1}
+                >
                   <ChevronLeft size={15} />
                 </PageButton>
-                <PageButton active>1</PageButton>
-                <PageButton>2</PageButton>
-                <PageButton>3</PageButton>
-                <span className="px-2 text-[#b9c9ce]">...</span>
-                <PageButton>245</PageButton>
-                <PageButton>
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map(
+                  (page) => (
+                    <PageButton
+                      key={page}
+                      active={page === currentSafePage}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </PageButton>
+                  ),
+                )}
+                <PageButton
+                  onClick={() =>
+                    setCurrentPage((page) => Math.min(totalPages, page + 1))
+                  }
+                  disabled={currentSafePage === totalPages}
+                >
                   <ChevronRight size={15} />
                 </PageButton>
               </div>
@@ -543,6 +688,32 @@ export default function AdminPage() {
           />
         </Modal>
       )}
+
+      {openModal === "renamePlayer" && (
+        <Modal title="Rename Player">
+          <p className="mb-3 text-sm text-zinc-400">
+            {selectedPlayer?.email}
+          </p>
+
+          <input
+            value={renameFullName}
+            onChange={(event) => setRenameFullName(event.target.value)}
+            placeholder="New player name"
+            className="mb-6 h-[54px] w-full rounded border border-white/10 bg-[#070d0d] px-4 text-zinc-100 outline-none focus:border-[#8ed8ec]"
+          />
+
+          <ModalActions
+            cancel={() => {
+              setSelectedPlayer(null);
+              setRenameFullName("");
+              setOpenModal(null);
+            }}
+            confirm={renamePlayer}
+            confirmText={isLoading ? "Saving..." : "Save Name"}
+            disabled={isLoading}
+          />
+        </Modal>
+      )}
     </main>
   );
 }
@@ -550,6 +721,7 @@ export default function AdminPage() {
 function mapUserToPlayer(user: BackendUser): Player {
   return {
     id: String(user.id),
+    memberCode: user.memberCode ?? `GC-${String(user.id).padStart(4, "0")}`,
     fullName: user.fullName,
     email: user.email,
     role: user.role,
@@ -652,13 +824,19 @@ function StatusBadge({ status }: { status: Player["status"] }) {
 function PageButton({
   children,
   active,
+  onClick,
+  disabled,
 }: {
   children: React.ReactNode;
   active?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
-      className={`flex h-[32px] min-w-[32px] items-center justify-center border border-[#3a4d54] text-xs ${
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex h-[32px] min-w-[32px] items-center justify-center border border-[#3a4d54] text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
         active ? "bg-[#a2ecf5] text-[#06161b]" : "bg-[#0d252d] text-white"
       }`}
     >

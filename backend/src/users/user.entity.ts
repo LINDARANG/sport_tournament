@@ -16,6 +16,14 @@ export class User {
   @Column({ name: 'email', type: 'nvarchar', length: 255, unique: true })
   email: string;
 
+  @Column({
+    name: 'member_code',
+    type: 'nvarchar',
+    length: 20,
+    nullable: true,
+  })
+  memberCode: string | null;
+
   @Column({ name: 'full_name', type: 'nvarchar', length: 255 })
   fullName: string;
 
