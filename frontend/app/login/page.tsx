@@ -13,6 +13,7 @@ import {
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { apiRequest, type CurrentUser } from "../api";
+import NoticeBanner, { type Notice } from "../notice-banner";
 
 type LoginResponse = {
   message: string;
@@ -25,6 +26,11 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  function showNotice(message: string, tone: Notice["tone"] = "info") {
+    setNotice({ message, tone });
+  }
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,7 +38,7 @@ export default function LoginPage() {
     const email = username.trim().toLowerCase();
 
     if (!email || !password) {
-      alert("Please enter email and password.");
+      showNotice("Please enter email and password.", "error");
       return;
     }
 
@@ -50,7 +56,10 @@ export default function LoginPage() {
       localStorage.setItem("currentUser", JSON.stringify(data.user));
       router.push(data.user.role === "ADMIN" ? "/admin" : "/player");
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Login failed.");
+      showNotice(
+        error instanceof Error ? error.message : "Login failed.",
+        "error",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -58,6 +67,7 @@ export default function LoginPage() {
 
   return (
     <main className="auth-page flex min-h-screen flex-col overflow-hidden">
+      <NoticeBanner notice={notice} onClose={() => setNotice(null)} />
       <header className="flex h-[90px] shrink-0 items-center justify-between border-b border-white/10 px-8">
         <h1 className="text-[30px] font-black tracking-[-0.06em] text-[#9ddff2] drop-shadow-[0_0_10px_rgba(142,216,236,0.45)]">
           TWENTY-TECH
@@ -129,7 +139,7 @@ export default function LoginPage() {
             </Link>
             <button
               type="button"
-              onClick={() => alert("this feature is not ready")}
+              onClick={() => showNotice("this feature is not ready")}
               className="flex h-9 items-center gap-2 rounded border border-white/10 bg-[#080f0f] px-3 text-xs font-black uppercase tracking-[0.08em] text-zinc-300 transition hover:border-[#8ed8ec88] hover:text-[#8ed8ec]"
             >
               <GoogleLogo />

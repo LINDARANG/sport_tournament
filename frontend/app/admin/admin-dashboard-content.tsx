@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { apiRequest } from "../api";
+import NoticeBanner, { type Notice } from "../notice-banner";
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -93,6 +94,7 @@ export default function AdminDashboardContent({
 }) {
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
   const [isLoading, setIsLoading] = useState(true);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
     void loadDashboard();
@@ -105,18 +107,26 @@ export default function AdminDashboardContent({
       const data = await apiRequest<DashboardData>("/dashboard");
       setDashboard(data);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Cannot load dashboard.");
+      showNotice(
+        error instanceof Error ? error.message : "Cannot load dashboard.",
+        "error",
+      );
     } finally {
       setIsLoading(false);
     }
   }
 
+  function showNotice(message: string, tone: Notice["tone"] = "info") {
+    setNotice({ message, tone });
+  }
+
   function showNotReady() {
-    alert("this feature is not ready");
+    showNotice("this feature is not ready");
   }
 
   return (
     <div className="px-8 py-9">
+      <NoticeBanner notice={notice} onClose={() => setNotice(null)} />
       <div className="mb-8 flex items-start justify-between gap-6">
         <div>
           <h2 className="text-[34px] font-black leading-none text-white">

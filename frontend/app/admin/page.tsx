@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import { apiRequest, type CurrentUser } from "../api";
 import { logoutAll, readCurrentUser } from "../auth-sync";
+import NoticeBanner, { type Notice } from "../notice-banner";
 import AdminDashboardContent from "./admin-dashboard-content";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -95,7 +96,12 @@ export default function AdminPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
   const isAdmin = currentUser?.role === "ADMIN";
+
+  function showNotice(message: string, tone: Notice["tone"] = "info") {
+    setNotice({ message, tone });
+  }
 
   function refreshDashboard() {
     setDashboardRefreshKey((key) => key + 1);
@@ -166,18 +172,18 @@ export default function AdminPage() {
       const users = await apiRequest<BackendUser[]>("/users");
       setPlayers(users.map(mapUserToPlayer));
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Cannot load users.");
+      showNotice(error instanceof Error ? error.message : "Cannot load users.");
     }
   }
 
   async function createPlayer() {
     if (!isAdmin) {
-      alert("Only admin can create players.");
+      showNotice("Only admin can create players.");
       return;
     }
 
     if (!fullName.trim() || !email.trim()) {
-      alert("Please enter name and email.");
+      showNotice("Please enter name and email.");
       return;
     }
 
@@ -192,7 +198,7 @@ export default function AdminPage() {
         }),
       });
 
-      alert(
+      showNotice(
         `User created successfully. Default password: ${data.user.defaultPassword}`,
       );
       setFullName("");
@@ -201,7 +207,7 @@ export default function AdminPage() {
       await fetchPlayers();
       refreshDashboard();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Create user failed.");
+      showNotice(error instanceof Error ? error.message : "Create user failed.");
     } finally {
       setIsLoading(false);
     }
@@ -213,17 +219,17 @@ export default function AdminPage() {
     }
 
     if (currentUser?.role !== "ADMIN") {
-      alert("Only admin can rename players.");
+      showNotice("Only admin can rename players.");
       return;
     }
 
     if (!renameFullName.trim()) {
-      alert("Please enter a new player name.");
+      showNotice("Please enter a new player name.");
       return;
     }
 
     if (!renameEmail.trim()) {
-      alert("Please enter player email.");
+      showNotice("Please enter player email.");
       return;
     }
 
@@ -241,7 +247,7 @@ export default function AdminPage() {
         },
       );
 
-      alert("Player updated successfully.");
+      showNotice("Player updated successfully.");
       setSelectedPlayer(null);
       setRenameFullName("");
       setRenameEmail("");
@@ -249,7 +255,7 @@ export default function AdminPage() {
       await fetchPlayers();
       refreshDashboard();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Update player failed.");
+      showNotice(error instanceof Error ? error.message : "Update player failed.");
     } finally {
       setIsLoading(false);
     }
@@ -266,7 +272,7 @@ export default function AdminPage() {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const preferredSheet =
-        workbook.SheetNames.find((sheetName) => sheetName.includes("Dá»± Ä‘oĂ¡n")) ??
+        workbook.SheetNames.find((sheetName) => sheetName.includes("Dự đoán")) ??
         workbook.SheetNames[0];
       const worksheet = workbook.Sheets[preferredSheet];
       const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
@@ -279,10 +285,10 @@ export default function AdminPage() {
       setImportPlayers(imported);
 
       if (imported.length === 0) {
-        alert("Cannot find player names in this Excel file.");
+        showNotice("Cannot find player names in this Excel file.");
       }
     } catch {
-      alert("Cannot read this Excel file.");
+      showNotice("Cannot read this Excel file.");
       setImportFileName("");
       setImportPlayers([]);
     }
@@ -290,12 +296,12 @@ export default function AdminPage() {
 
   async function importPlayersFromList() {
     if (!isAdmin) {
-      alert("Only admin can import players.");
+      showNotice("Only admin can import players.");
       return;
     }
 
     if (importPlayers.length === 0) {
-      alert("Please choose an Excel file first.");
+      showNotice("Please choose an Excel file first.");
       return;
     }
 
@@ -324,7 +330,7 @@ export default function AdminPage() {
     await fetchPlayers();
 
     if (failedRows.length > 0) {
-      alert(
+      showNotice(
         `Imported ${successCount}/${importPlayers.length} players.\nFailed:\n${failedRows.join(
           "\n",
         )}`,
@@ -332,7 +338,7 @@ export default function AdminPage() {
       return;
     }
 
-    alert(`Imported ${successCount} players. Default password: 123456`);
+    showNotice(`Imported ${successCount} players. Default password: 123456`);
     setImportFileName("");
     setImportPlayers([]);
     setOpenModal(null);
@@ -340,12 +346,12 @@ export default function AdminPage() {
 
   async function deletePlayer(player: Player) {
     if (currentUser?.role !== "ADMIN") {
-      alert("Only admin can delete players.");
+      showNotice("Only admin can delete players.");
       return;
     }
 
     if (player.role === "ADMIN") {
-      alert("Cannot delete the admin account.");
+      showNotice("Cannot delete the admin account.");
       return;
     }
 
@@ -364,11 +370,11 @@ export default function AdminPage() {
         method: "DELETE",
       });
 
-      alert("Player deleted successfully.");
+      showNotice("Player deleted successfully.");
       await fetchPlayers();
       refreshDashboard();
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Delete player failed.");
+      showNotice(error instanceof Error ? error.message : "Delete player failed.");
     } finally {
       setIsLoading(false);
     }
@@ -376,14 +382,14 @@ export default function AdminPage() {
 
   async function deleteAllPlayers() {
     if (currentUser?.role !== "ADMIN") {
-      alert("Only admin can delete players.");
+      showNotice("Only admin can delete players.");
       return;
     }
 
     const playerCount = players.filter((player) => player.role === "PLAYER").length;
 
     if (playerCount === 0) {
-      alert("There are no players to delete.");
+      showNotice("There are no players to delete.");
       return;
     }
 
@@ -405,12 +411,12 @@ export default function AdminPage() {
         method: "DELETE",
       });
 
-      alert(`Deleted ${data.deletedCount} players.`);
+      showNotice(`Deleted ${data.deletedCount} players.`);
       setCurrentPage(1);
       await fetchPlayers();
       refreshDashboard();
     } catch (error) {
-      alert(
+      showNotice(
         error instanceof Error ? error.message : "Delete all players failed.",
       );
     } finally {
@@ -424,12 +430,12 @@ export default function AdminPage() {
     }
 
     if (currentUser?.role !== "ADMIN") {
-      alert("Only admin can change player status.");
+      showNotice("Only admin can change player status.");
       return;
     }
 
     if (selectedPlayer.role === "ADMIN") {
-      alert("Cannot change the admin account status.");
+      showNotice("Cannot change the admin account status.");
       return;
     }
 
@@ -444,13 +450,13 @@ export default function AdminPage() {
         },
       );
 
-      alert("Player status updated successfully.");
+      showNotice("Player status updated successfully.");
       setSelectedPlayer(null);
       setOpenModal(null);
       await fetchPlayers();
       refreshDashboard();
     } catch (error) {
-      alert(
+      showNotice(
         error instanceof Error ? error.message : "Change player status failed.",
       );
     } finally {
@@ -467,12 +473,12 @@ export default function AdminPage() {
     }
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      alert("Please fill all password fields.");
+      showNotice("Please fill all password fields.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      alert("Confirm password does not match.");
+      showNotice("Confirm password does not match.");
       return;
     }
 
@@ -486,14 +492,14 @@ export default function AdminPage() {
         }),
       });
 
-      alert("Password changed successfully.");
+      showNotice("Password changed successfully.");
 
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setOpenModal(null);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Change password failed.");
+      showNotice(error instanceof Error ? error.message : "Change password failed.");
     }
   }
 
@@ -504,6 +510,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-[#06161b] text-[#d9e5e7]">
+      <NoticeBanner notice={notice} onClose={() => setNotice(null)} />
       <aside className="fixed left-0 top-0 flex h-screen w-[260px] flex-col border-r border-[#3c5056] bg-[#0d252d]">
         <div className="px-6 pt-8">
           <h1 className="text-sm font-black uppercase leading-3 tracking-[0.08em] text-white">
@@ -518,10 +525,10 @@ export default function AdminPage() {
 
         <nav className="mt-14 space-y-2 text-sm font-bold">
           <MenuItem active={activeView === "dashboard"} icon={<LayoutDashboard size={21} />} label="Dashboard" onClick={() => setActiveView("dashboard")} />
-          <MenuItem icon={<Trophy size={21} />} label="Tournaments" onClick={() => alert("this feature is not ready")} />
-          <MenuItem icon={<Gamepad2 size={21} />} label="Matches" onClick={() => alert("this feature is not ready")} />
+          <MenuItem icon={<Trophy size={21} />} label="Tournaments" onClick={() => showNotice("this feature is not ready")} />
+          <MenuItem icon={<Gamepad2 size={21} />} label="Matches" onClick={() => showNotice("this feature is not ready")} />
           <MenuItem active={activeView === "players"} icon={<Users size={18} />} label="Players" onClick={() => setActiveView("players")} />
-          <MenuItem icon={<BarChart3 size={21} />} label="Leaderboard" onClick={() => alert("this feature is not ready")} />
+          <MenuItem icon={<BarChart3 size={21} />} label="Leaderboard" onClick={() => showNotice("this feature is not ready")} />
         </nav>
 
         <div className="mt-auto border-t border-[#3c5056] p-6">
@@ -727,12 +734,12 @@ export default function AdminPage() {
                         <button
                           onClick={() => {
                             if (!isAdmin) {
-                              alert("Only admin can rename players.");
+                              showNotice("Only admin can rename players.");
                               return;
                             }
 
                             if (player.role === "ADMIN") {
-                              alert("Cannot rename the admin account.");
+                              showNotice("Cannot rename the admin account.");
                               return;
                             }
 
@@ -756,12 +763,12 @@ export default function AdminPage() {
                         <button
                           onClick={() => {
                             if (!isAdmin) {
-                              alert("Only admin can change player status.");
+                              showNotice("Only admin can change player status.");
                               return;
                             }
 
                             if (player.role === "ADMIN") {
-                              alert("Cannot change the admin account status.");
+                              showNotice("Cannot change the admin account status.");
                               return;
                             }
 
@@ -1246,7 +1253,7 @@ function normalizePlayerName(name: string) {
 }
 
 function slugifyName(name: string) {
-  const withoutVietnameseD = name.replace(/Ä‘/g, "d").replace(/Ä/g, "D");
+  const withoutVietnameseD = name.replace(/đ/g, "d").replace(/Đ/g, "D");
   const normalized = withoutVietnameseD
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
@@ -1262,8 +1269,8 @@ function slugifyName(name: string) {
 
 function normalizeHeader(value: unknown) {
   return readCell(value)
-    .replace(/Ä‘/g, "d")
-    .replace(/Ä/g, "D")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
