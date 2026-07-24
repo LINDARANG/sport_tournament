@@ -1,7 +1,8 @@
-"use client";
+﻿"use client";
 
 import { apiRequest, type CurrentUser } from "../api";
 import { logoutAll, readCurrentUser } from "../auth-sync";
+import AdminDashboardContent from "./admin-dashboard-content";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as XLSX from "xlsx";
@@ -61,19 +62,17 @@ type ImportedPlayer = {
   email: string;
 };
 
+type AdminView = 'dashboard' | 'players';
+
 const PLAYERS_PER_PAGE = 5;
 const COMPANY_EMAIL_DOMAIN = "@twenty-tech.com";
 
 export default function AdminPage() {
   const router = useRouter();
   const [players, setPlayers] = useState<Player[]>([]);
-  const [currentUser] = useState<CurrentUser | null>(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
-    return readCurrentUser() as CurrentUser | null;
-  });
+  const [activeView, setActiveView] = useState<AdminView>("players");
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -98,6 +97,10 @@ export default function AdminPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const isAdmin = currentUser?.role === "ADMIN";
 
+  function refreshDashboard() {
+    setDashboardRefreshKey((key) => key + 1);
+  }
+
   useEffect(() => {
     const currentUser = readCurrentUser() as CurrentUser | null;
 
@@ -106,6 +109,7 @@ export default function AdminPage() {
       return;
     }
 
+    setCurrentUser(currentUser);
     void fetchPlayers();
 
     function handleStorage(event: StorageEvent) {
@@ -195,6 +199,7 @@ export default function AdminPage() {
       setEmail("");
       setOpenModal(null);
       await fetchPlayers();
+      refreshDashboard();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Create user failed.");
     } finally {
@@ -242,6 +247,7 @@ export default function AdminPage() {
       setRenameEmail("");
       setOpenModal(null);
       await fetchPlayers();
+      refreshDashboard();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Update player failed.");
     } finally {
@@ -260,7 +266,7 @@ export default function AdminPage() {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const preferredSheet =
-        workbook.SheetNames.find((sheetName) => sheetName.includes("Dự đoán")) ??
+        workbook.SheetNames.find((sheetName) => sheetName.includes("Dá»± Ä‘oĂ¡n")) ??
         workbook.SheetNames[0];
       const worksheet = workbook.Sheets[preferredSheet];
       const rows = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
@@ -360,6 +366,7 @@ export default function AdminPage() {
 
       alert("Player deleted successfully.");
       await fetchPlayers();
+      refreshDashboard();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Delete player failed.");
     } finally {
@@ -401,6 +408,7 @@ export default function AdminPage() {
       alert(`Deleted ${data.deletedCount} players.`);
       setCurrentPage(1);
       await fetchPlayers();
+      refreshDashboard();
     } catch (error) {
       alert(
         error instanceof Error ? error.message : "Delete all players failed.",
@@ -440,6 +448,7 @@ export default function AdminPage() {
       setSelectedPlayer(null);
       setOpenModal(null);
       await fetchPlayers();
+      refreshDashboard();
     } catch (error) {
       alert(
         error instanceof Error ? error.message : "Change player status failed.",
@@ -508,11 +517,11 @@ export default function AdminPage() {
         </div>
 
         <nav className="mt-14 space-y-2 text-sm font-bold">
-          <MenuItem icon={<LayoutDashboard size={21} />} label="Dashboard" />
-          <MenuItem icon={<Trophy size={21} />} label="Tournaments" />
-          <MenuItem icon={<Gamepad2 size={21} />} label="Matches" />
-          <MenuItem active icon={<Users size={18} />} label="Players" />
-          <MenuItem icon={<BarChart3 size={21} />} label="Leaderboard" />
+          <MenuItem active={activeView === "dashboard"} icon={<LayoutDashboard size={21} />} label="Dashboard" onClick={() => setActiveView("dashboard")} />
+          <MenuItem icon={<Trophy size={21} />} label="Tournaments" onClick={() => alert("this feature is not ready")} />
+          <MenuItem icon={<Gamepad2 size={21} />} label="Matches" onClick={() => alert("this feature is not ready")} />
+          <MenuItem active={activeView === "players"} icon={<Users size={18} />} label="Players" onClick={() => setActiveView("players")} />
+          <MenuItem icon={<BarChart3 size={21} />} label="Leaderboard" onClick={() => alert("this feature is not ready")} />
         </nav>
 
         <div className="mt-auto border-t border-[#3c5056] p-6">
@@ -541,7 +550,7 @@ export default function AdminPage() {
       <section className="ml-[260px] min-h-screen bg-[#06161b]">
         <header className="flex h-[88px] items-center border-b border-[#3c5056] px-8">
           <div className="w-[190px] text-[25px] font-black uppercase leading-8 text-white">
-            PLAYERS
+            {activeView === "dashboard" ? "DASHBOARD" : "PLAYERS"}
           </div>
 
           <div className="ml-auto flex items-center gap-7">
@@ -559,6 +568,9 @@ export default function AdminPage() {
           </div>
         </header>
 
+        {activeView === "dashboard" ? (
+          <AdminDashboardContent isAdmin={isAdmin} refreshKey={dashboardRefreshKey} />
+        ) : (
         <div className="px-8 py-9">
           <div className="mb-8 flex items-start justify-between gap-6">
             <div>
@@ -820,6 +832,7 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+        )}
       </section>
 
       {openModal === "createUser" && (
@@ -1159,7 +1172,7 @@ function normalizePlayerName(name: string) {
 }
 
 function slugifyName(name: string) {
-  const withoutVietnameseD = name.replace(/đ/g, "d").replace(/Đ/g, "D");
+  const withoutVietnameseD = name.replace(/Ä‘/g, "d").replace(/Ä/g, "D");
   const normalized = withoutVietnameseD
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
@@ -1175,8 +1188,8 @@ function slugifyName(name: string) {
 
 function normalizeHeader(value: unknown) {
   return readCell(value)
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "D")
+    .replace(/Ä‘/g, "d")
+    .replace(/Ä/g, "D")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -1195,14 +1208,18 @@ function MenuItem({
   icon,
   label,
   active,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div
-      className={`flex h-[49px] items-center gap-4 px-6 tracking-[0.03em] ${
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-[49px] w-full items-center gap-4 px-6 text-left tracking-[0.03em] ${
         active
           ? "border-l-4 border-[#e9feff] bg-[#263b43] text-white"
           : "text-[#d7e4e8]"
@@ -1210,10 +1227,9 @@ function MenuItem({
     >
       {icon}
       <span>{label}</span>
-    </div>
+    </button>
   );
 }
-
 function StatCard({
   title,
   value,
@@ -1351,3 +1367,8 @@ function ModalActions({
     </div>
   );
 }
+
+
+
+
+
