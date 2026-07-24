@@ -14,6 +14,12 @@ import { PredictionsModule } from './predictions/predictions.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 
+function readSslConfig() {
+  return process.env.DB_SSL === 'false'
+    ? false
+    : { rejectUnauthorized: false };
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -21,18 +27,15 @@ import { DashboardModule } from './dashboard/dashboard.module';
     }),
 
     TypeOrmModule.forRoot({
-      type: 'mssql',
+      type: 'postgres',
       host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT),
+      port: Number(process.env.DB_PORT ?? 5432),
       username: process.env.DB_USERNAME,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       synchronize: false,
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
+      ssl: readSslConfig(),
     }),
 
     AuthModule,
@@ -49,4 +52,3 @@ import { DashboardModule } from './dashboard/dashboard.module';
   providers: [AppService],
 })
 export class AppModule {}
-

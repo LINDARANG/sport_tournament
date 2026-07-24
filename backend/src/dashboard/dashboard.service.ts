@@ -66,19 +66,19 @@ export class DashboardService {
   private summaryQuery() {
     return `
       SELECT
-        (SELECT COUNT(*) FROM tournaments WHERE status = 'ACTIVE') AS activeTournaments,
-        (SELECT COUNT(*) FROM users WHERE role = 'PLAYER') AS totalPlayers,
-        (SELECT COUNT(*) FROM users WHERE role = 'PLAYER' AND user_status <> 'ACTIVE') AS inactivePlayers,
-        (SELECT COUNT(*) FROM matches WHERE scheduled_time >= SYSDATETIME() AND status IN ('PENDING', 'LIVE')) AS upcomingMatches,
-        (SELECT COUNT(*) FROM predictions p JOIN matches m ON m.id = p.match_id WHERE m.status IN ('PENDING', 'LIVE')) AS pendingPredictions,
-        (SELECT COUNT(*) FROM matches WHERE sync_status IS NOT NULL AND sync_status <> 'SYNCED') AS warningMatches,
-        (SELECT MAX(last_synced_at) FROM matches WHERE last_synced_at IS NOT NULL) AS lastApiSync
+        (SELECT COUNT(*) FROM tournaments WHERE status = 'ACTIVE') AS "activeTournaments",
+        (SELECT COUNT(*) FROM users WHERE role = 'PLAYER') AS "totalPlayers",
+        (SELECT COUNT(*) FROM users WHERE role = 'PLAYER' AND user_status <> 'ACTIVE') AS "inactivePlayers",
+        (SELECT COUNT(*) FROM matches WHERE scheduled_time >= NOW() AND status IN ('PENDING', 'LIVE')) AS "upcomingMatches",
+        (SELECT COUNT(*) FROM predictions p JOIN matches m ON m.id = p.match_id WHERE m.status IN ('PENDING', 'LIVE')) AS "pendingPredictions",
+        (SELECT COUNT(*) FROM matches WHERE sync_status IS NOT NULL AND sync_status <> 'SYNCED') AS "warningMatches",
+        (SELECT MAX(last_synced_at) FROM matches WHERE last_synced_at IS NOT NULL) AS "lastApiSync"
     `;
   }
 
   private tournamentsQuery() {
     return `
-      SELECT TOP 10
+      SELECT
         t.id,
         t.name,
         t.status,
@@ -98,56 +98,59 @@ export class DashboardService {
         END,
         t.updated_at DESC,
         t.created_at DESC
+      LIMIT 10
     `;
   }
 
   private upcomingScheduleQuery() {
     return `
-      SELECT TOP 8
+      SELECT
         m.id,
-        t.name AS tournamentName,
-        COALESCE(home.name, m.home_placeholder) AS homeTeam,
-        COALESCE(away.name, m.away_placeholder) AS awayTeam,
-        m.scheduled_time AS scheduledTime,
-        DATEADD(minute, -m.lock_minutes_before_start, m.scheduled_time) AS deadline,
+        t.name AS "tournamentName",
+        COALESCE(home.name, m.home_placeholder) AS "homeTeam",
+        COALESCE(away.name, m.away_placeholder) AS "awayTeam",
+        m.scheduled_time AS "scheduledTime",
+        m.scheduled_time - (m.lock_minutes_before_start * INTERVAL '1 minute') AS deadline,
         COALESCE(m.external_source, 'MANUAL') AS source,
         m.status
       FROM matches m
       JOIN tournaments t ON t.id = m.tournament_id
       LEFT JOIN teams home ON home.id = m.home_team_id
       LEFT JOIN teams away ON away.id = m.away_team_id
-      WHERE m.scheduled_time >= SYSDATETIME()
+      WHERE m.scheduled_time >= NOW()
       ORDER BY m.scheduled_time ASC
+      LIMIT 8
     `;
   }
 
   private activitiesQuery() {
     return `
-      SELECT TOP 8 *
+      SELECT *
       FROM (
         SELECT
           CONCAT('match-', m.id) AS id,
           'match' AS type,
           CONCAT('Match #', m.id, ' moved to ', m.status) AS message,
-          m.updated_at AS createdAt
+          m.updated_at AS "createdAt"
         FROM matches m
         UNION ALL
         SELECT
           CONCAT('tournament-', t.id) AS id,
           'tournament' AS type,
           CONCAT(t.name, ' tournament updated') AS message,
-          t.updated_at AS createdAt
+          t.updated_at AS "createdAt"
         FROM tournaments t
         UNION ALL
         SELECT
           CONCAT('user-', u.id) AS id,
           'user' AS type,
           CONCAT(u.full_name, ' joined the platform') AS message,
-          u.created_at AS createdAt
+          u.created_at AS "createdAt"
         FROM users u
         WHERE u.role = 'PLAYER'
       ) activity
-      ORDER BY createdAt DESC
+      ORDER BY "createdAt" DESC
+      LIMIT 8
     `;
   }
 
@@ -181,6 +184,9 @@ export class DashboardService {
     return `FD_${String(hash).padStart(5, '0').slice(-5)}`;
   }
 }
+
+
+
 
 
 
